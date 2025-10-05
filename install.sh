@@ -14,6 +14,8 @@ set -e  # Exit on any error
 # This changes from device to device. So, Change it here.
 # This is supposed to be ~/ but some servers don't allow that access
 HOME_PATH="/home/ubuntu"
+STRG_PATH="${HOME_PATH}/GH200"
+GIT_PATH="${STRG_PATH}/Lambda-ARM_NVIDIA-GH200-2DMatSynthPredictions"
 
 # Set the bash location and the install directory
 BASH_FILE="${HOME_PATH}/.bashrc"
@@ -388,3 +390,10 @@ EOF
 
 # Run source ~/.bashrc
 source ~/.bashrc
+
+# Move the files to the code path
+cd $GIT_PATH
+cp "main.py" $CODE_PATH/main.py
+cp -r 'DFT Output DFTD4' $CODE_PATH/'DFT Output DFTD4'
+cp -r 'NIST-JANAF Files_gases' $CODE_PATH/'NIST-JANAF Files_gases'
+cp -r 'Pubchem Structures' $CODE_PATH/'Pubchem Structures'
