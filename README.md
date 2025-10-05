@@ -6,7 +6,9 @@ This script is designed to run [GPAW](https://gpaw.readthedocs.io/) on [Lambda's
 To run it, simply pull the git to a directory on the server and run the following commands.
 
 ```bash
-cd Lambda-ARM_NVIDIA-GH200-2DMatSynthPredictions`
+cd ~/
+git pull https://github.com/jpferrierjr/Lambda-ARM_NVIDIA-GH200-2DMatSynthPredictions.git
+cd Lambda-ARM_NVIDIA-GH200-2DMatSynthPredictions
 chmod a+x install.sh
 sudo ./install.sh
 ```
