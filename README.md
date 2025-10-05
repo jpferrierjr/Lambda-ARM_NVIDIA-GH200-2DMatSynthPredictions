@@ -15,7 +15,7 @@ This will install and compile [LibvdWXC](https://gitlab.com/libvdwxc/libvdwxc), 
 
 In the `install.sh` script, you can specify which versions of `MAGMA` and `ELPA` you want via the variables `ELPA_VER` and `MAGMA_VER`. Though, it should be noted that the `ELPA` version is currently set to the newest version that consistenly works with `GPAW` (version 2023.11.001).
 
-In addition to this, the `install.sh` script installs [FFTW3](), [OpenBLAS](), [OpenMPI](), [SCALAPACK]() (with MPI support), and [LibXC]()
+In addition to this, the `install.sh` script installs [FFTW3](https://www.fftw.org/), [OpenBLAS](https://en.wikipedia.org/wiki/OpenBLAS), [OpenMPI](https://en.wikipedia.org/wiki/Open_MPI), [SCALAPACK](https://en.wikipedia.org/wiki/ScaLAPACK) (with MPI support), and [LibXC](https://libxc.gitlab.io/)
 
 Finally, the script builds a custom `~/.gpaw/siteconfig.py` file to install `GPAW` with the correct linkers.
 
