@@ -57,7 +57,7 @@ os.makedirs( sub_path, exist_ok = True )
 # XCs
 xc_list     = { 
     'PBE-D4':'PBE',
-    'r2SCAND4': 'MGGA_X_R2SCAN+MGGA_C_R2SCAN'
+    #'r2SCAND4': 'MGGA_X_R2SCAN+MGGA_C_R2SCAN'
 }
 dftd4_method = {
     'PBE-D4': 'pbe',
