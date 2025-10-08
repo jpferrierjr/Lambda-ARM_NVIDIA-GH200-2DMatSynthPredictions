@@ -6,6 +6,7 @@ from ase import Atoms
 from ase.units import kB
 from dftd4.ase import DFTD4
 from gpaw.mixer import Mixer
+from ase.parallel import world
 from ase.optimize import FIRE
 from ase.phonons import Phonons
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ from ase.spacegroup import crystal
 from ase.vibrations import Vibrations
 from gpaw.new.ase_interface import GPAW
 from ase.filters import FrechetCellFilter
+from ase.parallel import paropen, parprint
 from ase.io import Trajectory, read, write
 from ase.build import surface, mx2, graphene
 from ase.constraints import FixAtoms, FixSymmetry
@@ -25,7 +27,7 @@ os.environ['GPAW_USE_GPUS'] = 'True'
 
 bulk_substrates = None
 materials_2d    = None
-fmax            = 0.01
+fmax            = 0.05
 kpt_dens        = 4.8
 
 bulk_calc_vals  = {}
@@ -344,7 +346,7 @@ def molecular_optimizer(
 
         # Optimize energy cutoff
         if encut_exists:
-            print( "    cutoff_energy file found!" )
+            parprint( "    cutoff_energy file found!" )
             return_vals[xc]['cutoff_energy'] = np.load( encut_file )
         else:
             # Do cutoff energy
@@ -366,18 +368,19 @@ def molecular_optimizer(
             return_vals[xc]['cutoff_energy'] = val_list[-2]
 
             # Save the value
-            np.save( encut_file, val_list[-2] )
+            if world.rank==0:
+                np.save( encut_file, val_list[-2] )
 
-            # Plot the convergence
-            plt.plot( val_list, pot_ens )
-            plt.xlabel( "Cutoff Energy (eV)" )
-            plt.ylabel( "Potential Energy (eV)" )
-            plt.savefig( fname = os.path.join( molecule_path, f'XC-{xc_name}_Opt-cutoff_energy.png' ), dpi = 300 )
-            plt.clf()
+                # Plot the convergence
+                plt.plot( val_list, pot_ens )
+                plt.xlabel( "Cutoff Energy (eV)" )
+                plt.ylabel( "Potential Energy (eV)" )
+                plt.savefig( fname = os.path.join( molecule_path, f'XC-{xc_name}_Opt-cutoff_energy.png' ), dpi = 300 )
+                plt.clf()
 
         # Optimize vacuum
         if vac_exists:
-            print( "    vacuum file found!" )
+            parprint( "    vacuum file found!" )
             return_vals[xc]['vacuum'] = np.load( vac_file )
         else:
 
@@ -402,14 +405,15 @@ def molecular_optimizer(
             return_vals[xc]['vacuum'] = val_list[-2]
 
             # Save the value
-            np.save( vac_file, val_list[-2] )
+            if world.rank==0:
+                np.save( vac_file, val_list[-2] )
 
-            # Plot the convergence
-            plt.plot( val_list, pot_ens )
-            plt.xlabel( "Vacuum (Å)" )
-            plt.ylabel( "Potential Energy (eV)" )
-            plt.savefig( fname = os.path.join( molecule_path, f'XC-{xc_name}_Opt-vacuum.png' ), dpi = 300 )
-            plt.clf()
+                # Plot the convergence
+                plt.plot( val_list, pot_ens )
+                plt.xlabel( "Vacuum (Å)" )
+                plt.ylabel( "Potential Energy (eV)" )
+                plt.savefig( fname = os.path.join( molecule_path, f'XC-{xc_name}_Opt-vacuum.png' ), dpi = 300 )
+                plt.clf()
 
     return return_vals
 
@@ -468,7 +472,8 @@ def crystal_optimizer(
             return_vals[xc]['cutoff_energy'] = val_list[-2]
 
             # Save the value
-            np.save( encut_file, val_list[-2] )
+            if world.rank==0:
+                np.save( encut_file, val_list[-2] )
 
         # Optimize vacuum
         if not is_bulk:
@@ -504,7 +509,8 @@ def crystal_optimizer(
                 return_vals[xc]['vacuum'] = val_list[-2]
 
                 # Save the value
-                np.save( vac_file, val_list[-2] )
+                if world.rank==0:
+                    np.save( vac_file, val_list[-2] )
 
     return return_vals
 
@@ -621,7 +627,7 @@ def create_wse2( vacuum = 5.0 ):
 
 #region build molecules
 for file in PS_Files:
-    with open( file, 'r' ) as f:
+    with paropen( file, 'r' ) as f:
         data = json.load(f)
 
     # Get the elements, positions, and total charge
@@ -658,7 +664,7 @@ for molecule in molecules:
     molecule_path = os.path.join( mol_path, molecule )
     os.makedirs( molecule_path, exist_ok = True )
 
-    print( f"Optimizing molecule {molecule}:" )
+    parprint( f"Optimizing molecule {molecule}:" )
 
     molecule_calc_vals[molecule] = molecular_optimizer( molecule = molecules[molecule], molecule_path = molecule_path )
 #endregion
@@ -701,7 +707,7 @@ for molecule in molecules:
                 # This moves the atoms all slightly in random directions before relaxation
                 # This is smart because it combats inherent symmetries that can exist in PubChem files.
                 displacements   = np.random.uniform( -0.05, 0.05, size = atoms.positions.shape )
-                # print( displacements )
+                # parprint( displacements )
                 atoms.positions += displacements
             else:
                 # See if PBE-D4 traj exists to save CPU comptutation time
@@ -718,7 +724,8 @@ for molecule in molecules:
             dyn.run( fmax = fmax )
 
             # Save the relative gpaw file
-            np.save( relaxed_poten, atoms.get_potential_energy() )
+            if world.rank==0:
+                np.save( relaxed_poten, atoms.get_potential_energy() )
 #endregion
 
 #region Calculate molecular vibrational energies
@@ -728,7 +735,7 @@ for molecule in molecules:
     molecule_vibs   = os.path.join( molecule_path, "vibrations" )
     molecule_traj   = os.path.join( molecule_path, "trajectories" )
 
-    print( f"----- Calculating Vibrations for {molecule} -----" )
+    parprint( f"----- Calculating Vibrations for {molecule} -----" )
 
     for xc in xc_list:
 
@@ -759,52 +766,53 @@ for molecule in molecules:
             real_vib_en     = real_vib_en[ real_vib_en != 0. ]
 
             # Save the real values
-            np.save( vib_file, real_vib_en )
+            if world.rank==0:
+                np.save( vib_file, real_vib_en )
 #endregion
 
 #region Build bulk
 bulk_substrates = {
-    # 'SiO2_alpha_quartz': create_sio2_alpha_quartz(),
-    'SiO2_beta_cristobalite': create_sio2_beta_cristobalite()#,
-    # 'Cu_111': create_copper_111(),
-    # 'Ni_111': create_nickel_111(),
-    # 'Sapphire_Al2O3_0001': create_sapphire_0001()
+    'SiO2_alpha_quartz': create_sio2_alpha_quartz(),
+    'SiO2_beta_cristobalite': create_sio2_beta_cristobalite(),
+    'Cu_111': create_copper_111(),
+    'Ni_111': create_nickel_111(),
+    'Sapphire_Al2O3_0001': create_sapphire_0001()
 }
 #endregion
 
 #region Build 2D
 materials_2d = {
-    # 'graphene': create_graphene(),
-    # 'hbn': create_hbn(),
-    'mos2': create_mos2()#,
-    # 'mose2': create_mose2(),
-    # 'ws2': create_ws2(),
-    # 'wse2': create_wse2()
+    'graphene': create_graphene(),
+    'hbn': create_hbn(),
+    'mos2': create_mos2(),
+    'mose2': create_mose2(),
+    'ws2': create_ws2(),
+    'wse2': create_wse2()
 }
 #endregion
 
 #region Optimize bulks GPAW
 for bulk in bulk_substrates:
     # Create the directories needed, if they don't exist.
-    bulk_path = os.path.join( bulk_path, f"{bulk}" )
-    os.makedirs( bulk_path, exist_ok = True )
+    blk_path = os.path.join( bulk_path, f"{bulk}" )
+    os.makedirs( blk_path, exist_ok = True )
 
-    print( f"Optimizing crystal {bulk}:" )
+    parprint( f"Optimizing crystal {bulk}:" )
 
-    bulk_calc_vals[bulk] = crystal_optimizer( crystal = bulk_substrates[bulk], crystal_path = bulk_path, is_bulk = True )
+    bulk_calc_vals[bulk] = crystal_optimizer( crystal = bulk_substrates[bulk], crystal_path = blk_path, is_bulk = True )
 #endregion
 
 #region Optimize bulk structures
 for bulk in bulk_substrates:
 
-    bulk_path   = os.path.join( bulk_path, f"{bulk}" )
-    traj_path   = os.path.join( bulk_path, "trajectories" )
+    blk_path   = os.path.join( bulk_path, f"{bulk}" )
+    traj_path   = os.path.join( blk_path, "trajectories" )
     os.makedirs( traj_path, exist_ok = True )
 
     # After this is done, we will continue with the rest of the XCs
     for xc in xc_list:
 
-        pot_file        = os.path.join( bulk_path, f'{xc}_relaxed.json' )
+        pot_file        = os.path.join( blk_path, f'{xc}_relaxed.json' )
         xc_traj_file    = os.path.join( traj_path, f'{xc}_relaxation.traj' )
 
         # If the gpaw file exists, this has been done already.
@@ -842,7 +850,7 @@ for bulk in bulk_substrates:
             }
 
             # Save the final potential energy just so that we can reference it later
-            with open( pot_file, 'w' ) as f:
+            with paropen( pot_file, 'w' ) as f:
                 json.dump( output_dict, f, indent = 4 )
 #endregion
 
@@ -853,7 +861,7 @@ for qmmat in materials_2d:
     sv_path = os.path.join( qm_path, f"{qmmat}" )
     os.makedirs( sv_path, exist_ok = True )
 
-    print( f"Optimizing 2D material {qmmat}:" )
+    parprint( f"Optimizing 2D material {qmmat}:" )
 
     qm_calc_vals[qmmat] = crystal_optimizer( crystal = materials_2d[qmmat], crystal_path = sv_path )
 #endregion
@@ -862,6 +870,13 @@ for qmmat in materials_2d:
 for bulk, qmat in combinations:
 
     het_name            = f"{qmat}_on_{bulk}"
+    sub_Es[bulk]        = {}
+    qmat_Es[qmat]       = {}
+    het_Es[het_name]    = {}
+    dE_sub2D[het_name]  = {}
+
+
+    parprint( f"Calculating {het_name} binding energy..." )
 
     blk_path            = os.path.join( bulk_path, f"{bulk}" )
     sb_path             = os.path.join( sub_path, f"{bulk}" )
@@ -887,7 +902,12 @@ for bulk, qmat in combinations:
 
         # Check if sub, qm, or hetero calculations already exist
         if os.path.isfile( het_bind_en ):
+            if het_name not in dE_sub2D:
+                dE_sub2D[het_name] = {}
+
             dE_sub2D[het_name][xc] = np.load( het_bind_en )
+
+            parprint( f"{het_name} binding energy for xc {xc} found! E={dE_sub2D[het_name][xc]:.2f}eV" )
         else:
 
             xc_traj_file    = os.path.join( traj_path, f'{xc}_relaxation.traj' )
@@ -1048,8 +1068,8 @@ for bulk, qmat in combinations:
                     calc        = DFTD4( method = dftd4_method[xc] ).add_calculator( gpw_calc )
                     sub_copy.set_calculator( calc )
                     sub_Es[bulk][xc][sub_sv_name]   = sub_copy.get_potential_energy()
-
-                np.save( sub_pot_f, sub_Es[bulk][xc][sub_sv_name] )
+                if world.rank==0:
+                    np.save( sub_pot_f, sub_Es[bulk][xc][sub_sv_name] )
 
             # Remove the substrate and freeze the 2D material
             # Check if xc and size has already been calculated for this 2D material
@@ -1070,16 +1090,17 @@ for bulk, qmat in combinations:
 
                     # Save the 2D material structure for use in calculating phonons later.
                     write( qmat_traj, mat_copy )
-
-                np.save( mat_pot_f, qmat_Es[qmat][xc][mat_sv_name] )
+                if world.rank==0:
+                    np.save( mat_pot_f, qmat_Es[qmat][xc][mat_sv_name] )
 
             # Build the dE_elec dictionary (normalized to 2D material unit cell)
             dE_sub2D[het_name][xc] = ( het_Es[het_name][xc]['poten'] - sub_Es[bulk][xc][sub_sv_name] - qmat_Es[qmat][xc][mat_sv_name] )/( het_Es[het_name][xc]['mat_size']*het_Es[het_name][xc]['mat_size'] )
 
-            print( f"The binding energy for {het_name} with xc {xc} is: {dE_sub2D[het_name][xc]:.2f} eV" )
+            parprint( f"The binding energy for {het_name} with xc {xc} is: {dE_sub2D[het_name][xc]:.2f} eV" )
 
             # Save the calculation
-            np.save( het_bind_en, dE_sub2D[het_name][xc] )
+            if world.rank==0:
+                np.save( het_bind_en, dE_sub2D[het_name][xc] )
 #endregion
 
 #region Calculate the phonon energies
@@ -1113,6 +1134,7 @@ for qmat in materials_2d:
 
             # Relax the 2D structure
             rlx_traj    = os.path.join( crys_path, f'{xc}_relaxation.traj' )
+
             # Check to see if the relaxation has been run before and start from where we left off
             if os.path.isfile( rlx_traj ):
                 mat:Atoms     = read( rlx_traj, index = "-1" )
@@ -1130,10 +1152,10 @@ for qmat in materials_2d:
 
             ### Calculate the phonons of the material
 
-            ph = Phonons( mat, calc, supercell = ( size, size, 1 ), center_refcell = True )
+            ph = Phonons( mat, calc, supercell = ( size, size, 1 ), center_refcell = True, name = vib_path )
             ph.run()
             ph.read( acoustic = True )
-            ph.clean()
+            #ph.clean()
             dos = ph.get_dos( kpts = ( 40, 40, 40 ) ).sample_grid( npts = 3000, width = 5e-4, xmin = 0.0 )
             
             # Save the values in our dictionary
@@ -1141,8 +1163,9 @@ for qmat in materials_2d:
             qmat_ph[qmat][xc]['DOS']        = dos.get_weights()
 
             # Save the values to numpy files.
-            np.save( vib_en_file, qmat_ph[qmat][xc]['energies'] )
-            np.save( vib_DOS_file, qmat_ph[qmat][xc]['DOS'] )
+            if world.rank==0:
+                np.save( vib_en_file, qmat_ph[qmat][xc]['energies'] )
+                np.save( vib_DOS_file, qmat_ph[qmat][xc]['DOS'] )
 #endregion
 
 #endregion

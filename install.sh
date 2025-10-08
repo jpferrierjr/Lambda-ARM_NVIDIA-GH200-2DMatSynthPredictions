@@ -129,7 +129,7 @@ cd $INSTALL_PATH
 if [ -d ${VDW_PATH} ]; then
     cd $INSTALL_PATH
 else
-    if [ -d ${INSTALL_PATH/libvdwxc} ]; then
+    if [ -d "${INSTALL_PATH}/libvdwxc" ]; then
         cd libvdwxc
     else
         git clone https://gitlab.com/libvdwxc/libvdwxc.git
@@ -254,7 +254,7 @@ source "${VENV_PATH}/bin/activate"
 
 # Upgrade and install
 pip install --upgrade pip
-pip install numpy==1.26.4 scipy ase wheel mpi4py dftd4 cupy-cuda12x
+pip install numpy==1.26.4 scipy ase wheel mpi4py dftd4 cupy-cuda12x spglib
 
 #endregion
 
@@ -265,17 +265,17 @@ pip install numpy==1.26.4 scipy ase wheel mpi4py dftd4 cupy-cuda12x
 
 # Extra precaution since some servers don't allow access to /root,
 # yet they set ~/=/root. Dumb
-export LD_LIBRARY_PATH=/usr/local/fftw/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/local/vdwxc/lib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=$MAGMA_PATH/lib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=$ELPA_PATH/lib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
 
-export LIBRARY_PATH=/usr/local/fftw/lib:$LIBRARY_PATH
+export LIBRARY_PATH=/usr/local/vdwxc/lib:$LIBRARY_PATH
 export LIBRARY_PATH=$MAGMA_PATH/lib:$LIBRARY_PATH
 export LIBRARY_PATH=$ELPA_PATH/lib:$LIBRARY_PATH
 export LIBRARY_PATH=$CUDA_PATH/lib64:$LIBRARY_PATH
 
-export C_INCLUDE_PATH=/usr/local/fftw/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=/usr/local/vdwxc/include:$C_INCLUDE_PATH
 export C_INCLUDE_PATH=$MAGMA_PATH/include:$C_INCLUDE_PATH
 export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/:$C_INCLUDE_PATH
 export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/elpa/:$C_INCLUDE_PATH
@@ -284,6 +284,16 @@ export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/elpa/include:$C
 export C_INCLUDE_PATH=$CUDA_PATH/include:$C_INCLUDE_PATH
 
 export GPAW_CONFIG=$HOME_PATH/.gpaw/siteconfig.py
+
+sudo tee /etc/ld.so.conf.d/gpaw-custom.conf << 'EOF'
+/usr/local/elpa/lib
+/usr/local/magma/lib
+/usr/local/libvdwxc/lib
+/usr/local/cuda/lib64
+EOF
+
+# Update the dynamic linker cache
+sudo ldconfig
 
 # Start the siteconfig.py file
 cat > siteconfig.py << EOF
@@ -348,7 +358,8 @@ if mpi:
 # LibvdWXC
 if libvdwxc:
     libraries += ['vdwxc']
-    library_dirs += ['${VDW_PATH}']
+    library_dirs += ['${VDW_PATH}/lib']
+    include_dirs += ['${VDW_PATH}/include']
 
 # GPU
 if gpu:
@@ -383,6 +394,20 @@ export LD_LIBRARY_PATH=${ELPA_PATH}/lib:${MAGMA_PATH}/lib:${CUDA_PATH}/lib64:${V
 export PATH=${CUDA_PATH}/bin:\$PATH
 export OMP_NUM_THREADS=1
 export GPAW_CONFIG=${HOME_PATH}/.gpaw/siteconfig.py
+export C_INCLUDE_PATH=/usr/local/vdwxc/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$MAGMA_PATH/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/elpa/:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/modules:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/elpa/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$CUDA_PATH/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=/usr/local/vdwxc/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$MAGMA_PATH/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/elpa/:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/modules:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$ELPA_PATH/include/elpa_openmp-2023.11.001/elpa/include:$C_INCLUDE_PATH
+export C_INCLUDE_PATH=$CUDA_PATH/include:$C_INCLUDE_PATH
 
 # Activate virtual environment
 source ${VENV_PATH}/bin/activate
@@ -397,3 +422,6 @@ cp "main.py" $CODE_PATH/main.py
 cp -r 'DFT Output DFTD4' $CODE_PATH/'DFT Output DFTD4'
 cp -r 'NIST-JANAF Files_gases' $CODE_PATH/'NIST-JANAF Files_gases'
 cp -r 'Pubchem Structures' $CODE_PATH/'Pubchem Structures'
+
+sudo chown -R ubuntu:ubuntu /home/ubuntu/code
+chmod -R u+rwX /home/ubuntu/code
